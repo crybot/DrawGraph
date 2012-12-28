@@ -10,6 +10,7 @@ namespace DrawGraph
 {
     class Drawer
     {
+        
         private Graph graph;
         private Pen graphPen;
         private Pen axesPen;
@@ -54,29 +55,50 @@ namespace DrawGraph
         {
             return new PointF(point.X * graph.CellSize + graph.Center.X, -point.Y * graph.CellSize + graph.Center.Y);
         }
+
         private void drawFunction(Graphics g, Function f)
         {
-            List<PointF> points = new List<PointF>();
+            List<List<PointF>> pointsList = new List<List<PointF>>();
+            pointsList.Add(new List<PointF>());
 
             int i = 0;
-            for (float x = -graph.NumOfCells / 2; x < graph.NumOfCells / 2; x += graph.Step, i++)
+            bool lastNan = false;
+            for (float x = -graph.NumOfCells; x < graph.NumOfCells; x += graph.Step, i++)
             {
-                PointF point = TransformPoint(new PointF(x, f.Apply(x)));
 
-                if (point.Y > graph.Heigth)
+                float y = f.Apply(x);
+                PointF point = TransformPoint(new PointF(x, y));
+
+                if (double.IsNaN(y))
                 {
-                    points.Add(new PointF(point.X, graph.Heigth + this.functionPen.Width));
+                    if (!lastNan)
+                    {
+                        pointsList.Add(new List<PointF>());
+                        lastNan = true;
+                    }
+                }
+                else if (point.Y > graph.Heigth)
+                {
+                    pointsList[pointsList.Count - 1].Add(new PointF(point.X, graph.Heigth + this.functionPen.Width));
                 }
                 else if (point.Y < 0)
                 {
-                    points.Add(new PointF(point.X, -this.functionPen.Width));
+                    pointsList[pointsList.Count - 1].Add(new PointF(point.X, -this.functionPen.Width));
                 }
                 else
                 {
-                    points.Add(point);
+                    lastNan = false;
+                    pointsList[pointsList.Count - 1].Add(point);
                 }
             }
-            g.DrawLines(functionPen, points.ToArray());
+
+            foreach (List<PointF> list in pointsList)
+            {
+                if (list.Count > 1)
+                {
+                    g.DrawLines(functionPen, list.ToArray());
+                }
+            }
         }
 
         public void DrawGraph(Graphics g)

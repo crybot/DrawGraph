@@ -28,9 +28,7 @@ namespace DrawGraph
 
             this.graph = new Graph(new Size(this.ClientSize.Width, this.ClientSize.Width), 20);
             this.drawer = new Drawer(graph, new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), this.BackColor);
-
             this.buffer = new Bitmap((int)graph.Width, (int)graph.Heigth);
-
         }
 
         private void MainForm_Paint(object sender, System.Windows.Forms.PaintEventArgs e)

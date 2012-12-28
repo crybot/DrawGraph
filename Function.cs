@@ -79,6 +79,9 @@ namespace DrawGraph
             converted = new StringBuilder(Regex.Replace(converted.ToString(), pattern, "Math.Tan"));
             pattern = "abs";
             converted = new StringBuilder(Regex.Replace(converted.ToString(), pattern, "Math.Abs"));
+            pattern = "sqrt";
+            converted = new StringBuilder(Regex.Replace(converted.ToString(), pattern, "Math.Sqrt"));
+
             return converted.ToString();
         }
         private bool IsNumberOrOperator(char c)
