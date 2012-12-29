@@ -1,45 +1,48 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.CodeDom.Compiler;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Reflection;
 using Microsoft.VisualBasic;
-using System.CodeDom.Compiler;
-using System.Text.RegularExpressions;
 
 namespace DrawGraph
 {
-    class Function
+    internal class Function
     {
-        private string expression;
-        private MethodInfo evaluateFunction;
+        private MethodInfo _evaluateFunction;
+        private string _expression;
 
-        public Function() { Expression = "0"; }
-        public Function(string f) { Expression = f; }
+        public Function(string f)
+        {
+            Expression = f;
+        }
+
+        public Function()
+            : this("0")
+        {
+        }
 
         public string Expression
         {
             get
-            {
-                return this.expression;
+            { 
+                return _expression; 
             }
 
             set
             {
-                this.expression = convertExpression(value);
-                createEvaluator();
+                _expression = ConvertExpression(value);
+                CreateEvaluator();
             }
         }
+
         public float Apply(float x)
         {
-            return (float)this.evaluateFunction.Invoke(null, new object[] { x });
+            return (float) _evaluateFunction.Invoke(null, new object[] {x});
         }
 
-        private string convertExpression(string expr)
+        private string ConvertExpression(string expr)
         {
-            string pattern;
-            StringBuilder converted = new StringBuilder(expr.Replace(" ", string.Empty));
+            string converted = expr.Replace(" ", string.Empty);
 
             for (int i = 0; i < converted.Length; i++)
             {
@@ -47,7 +50,7 @@ namespace DrawGraph
                 {
                     if (!IsNumberOrOperator(converted[i + 1]))
                     {
-                        converted.Insert(i + 1, '*');
+                        converted.Insert(i + 1, "*");
                         i++;
                     }
                 }
@@ -56,7 +59,7 @@ namespace DrawGraph
                 {
                     if (!IsOperator(converted[i + 1]))
                     {
-                        converted.Insert(i + 1, '*');
+                        converted.Insert(i + 1, "*");
                         i++;
                     }
                 }
@@ -65,40 +68,39 @@ namespace DrawGraph
                 {
                     if (!IsOperator(converted[i + 1]))
                     {
-                        converted.Insert(i + 1, '*');
+                        converted.Insert(i + 1, "*");
                         i++;
                     }
                 }
             }
 
-            pattern = "sin";
-            converted = new StringBuilder(Regex.Replace(converted.ToString(), pattern, "Math.Sin"));
-            pattern = "cos";
-            converted = new StringBuilder(Regex.Replace(converted.ToString(), pattern, "Math.Cos"));
-            pattern = "tan";
-            converted = new StringBuilder(Regex.Replace(converted.ToString(), pattern, "Math.Tan"));
-            pattern = "abs";
-            converted = new StringBuilder(Regex.Replace(converted.ToString(), pattern, "Math.Abs"));
-            pattern = "sqrt";
-            converted = new StringBuilder(Regex.Replace(converted.ToString(), pattern, "Math.Sqrt"));
+            converted = converted.Replace("sin", "Math.Sin")
+                                 .Replace("cos", "Math.Cos")
+                                 .Replace("tan", "Math.Tan")
+                                 .Replace("abs", "Math.Abs")
+                                 .Replace("log", "Math.Log")
+                                 .Replace("sqrt", "Math.Sqrt");
 
-            return converted.ToString();
+            return converted;
         }
+
         private bool IsNumberOrOperator(char c)
         {
-            string operators = "+-/*^.,)";
+            const string operators = "+-/*^.,)";
             return (char.IsNumber(c) || operators.Contains(c));
         }
+
         private bool IsOperator(char c)
         {
-            string operators = "+-/*^.,)";
+            const string operators = "+-/*^.,)";
             return (operators.Contains(c));
         }
-        private void createEvaluator()
+
+        private void CreateEvaluator()
         {
             // il codice compilato e` in vb.net poiche` semplifica il parsing dell'espressione
             string code = string.Format(
-               @"Imports System.Collections.Generic
+                @"Imports System.Collections.Generic
                  Imports System.Text
                  Imports System
                  Imports Microsoft.VisualBasic
@@ -109,25 +111,21 @@ namespace DrawGraph
 	                  End Function
                  End Class", Expression);
 
-            CompilerParameters parameters = new CompilerParameters();
-            CodeDomProvider provider = new VBCodeProvider();
+            var parameters = new CompilerParameters();
+            var provider = new VBCodeProvider();
 
             parameters.GenerateExecutable = false;
             parameters.TreatWarningsAsErrors = true;
             parameters.TempFiles.KeepFiles = false;
             parameters.GenerateInMemory = true;
 
-            CompilerResults results = provider.CompileAssemblyFromSource(parameters, code);
+            var results = provider.CompileAssemblyFromSource(parameters, code);
 
             if (results.Errors.Count > 0)
-            {
                 throw new Exception("Espressione non valida!");
-            }
-            else
-            {
-                Assembly asm = results.CompiledAssembly;
-                this.evaluateFunction = asm.GetType("Evaluator").GetMethod("Evaluate");
-            }
+
+            var asm = results.CompiledAssembly;
+            _evaluateFunction = asm.GetType("Evaluator").GetMethod("Evaluate");
         }
     }
 }

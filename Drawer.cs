@@ -1,156 +1,186 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Drawing2D;
+using System.Linq;
 
 namespace DrawGraph
 {
-    class Drawer
+    internal class Drawer
     {
-        
-        private Graph graph;
-        private Pen graphPen;
-        private Pen axesPen;
-        private Pen functionPen;
-        private Color backColor;
-        private List<Function> currentFunctions;
+        private const int WheelConstant = 120;
+        private const int ZoomMultiplier = 4;
 
-        private readonly int zoomMultiplier = 4;
-        private const int wheelConstant = 120;
-
-
-        public Pen FunctionPen
-        {
-            get { return functionPen; }
-            set { functionPen = value; }
-        }
+        private readonly Pen _axesPen;
+        private readonly Color _backColor;
+        private readonly List<Function> _currentFunctions;
+        private readonly Graph _graph;
 
         public Drawer(Graph graph, Pen graphPen, Pen axesPen, Pen functionPen, Color backColor)
         {
-            this.graph = graph;
-            this.graphPen = graphPen;
-            this.axesPen = axesPen;
-            this.functionPen = functionPen;
-            this.backColor = backColor;
-            this.currentFunctions = new List<Function>();
+            _graph = graph;
+            GraphPen = graphPen;
+            FunctionPen = functionPen;
+            _axesPen = axesPen;
+            _backColor = backColor;
+            _currentFunctions = new List<Function>();
+            DrawGrid = DrawTicks = DrawAxes = true;
         }
 
         public Drawer(Graph graph)
-            : this(graph, new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), Color.White) { }
+            : this(graph, new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), Color.White)
+        {
+        }
 
         public Drawer(Graph graph, Color backColor)
-            : this(graph, new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), backColor) { }
+            : this(graph, new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), backColor)
+        {
+        }
 
         public Drawer(Graph graph, Pen functionPen)
-            : this(graph, new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), functionPen, Color.White) { }
+            : this(graph, new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), functionPen, Color.White)
+        {
+        }
 
         public Drawer(Graph graph, Pen functionPen, Color backColor)
-            : this(graph, new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), functionPen, backColor) { }
+            : this(graph, new Pen(Brushes.Black, 2), new Pen(Brushes.Black, 2), functionPen, backColor)
+        {
+        }
 
+        public Pen GraphPen { get; set; }
+
+        public Pen FunctionPen { get; set; }
+
+        public Graph Graph
+        {
+            get { return _graph; }
+        }
+
+        public bool DrawGrid { get; set; }
+        public bool DrawTicks { get; set; }
+        public bool DrawAxes { get; set; }
 
         private PointF TransformPoint(PointF point)
         {
-            return new PointF(point.X * graph.CellSize + graph.Center.X, -point.Y * graph.CellSize + graph.Center.Y);
+            //the point (0,0) of the form is the upper left corner, so every graph point needs a conversion
+            return new PointF(point.X*Graph.CellSize + Graph.Center.X, -point.Y*Graph.CellSize + Graph.Center.Y);
         }
 
-        private void drawFunction(Graphics g, Function f)
+        // draw a single function
+        private void DrawFunction(Graphics g, Function f)
         {
-            List<List<PointF>> pointsList = new List<List<PointF>>();
-            pointsList.Add(new List<PointF>());
+            // a list of list of points is required to properly skip imaginary number(e.g sqrt(-1))     
+            var pointsList = new List<List<PointF>> {new List<PointF>()};
 
-            int i = 0;
             bool lastNan = false;
-            for (float x = -graph.NumOfCells; x < graph.NumOfCells; x += graph.Step, i++)
+            for (float x = -Graph.NumOfCells/2; x < Graph.NumOfCells/2; x += Graph.Step)
+                // from -X border to X border og the graph
             {
-
-                float y = f.Apply(x);
+                float y = f.Apply(x); // the y value of x is calculated thanks to reflection
                 PointF point = TransformPoint(new PointF(x, y));
+                // then the point obtained is converted to "real" coordinates
 
+                //when an imaginary number is discovered it creates a new separated list of points to draw
+                //every list of points will be drawn singularly
                 if (double.IsNaN(y))
                 {
-                    if (!lastNan)
+                    if (!lastNan) // it creates a new list of points only if the last number wasn't imaginary
                     {
                         pointsList.Add(new List<PointF>());
                         lastNan = true;
                     }
                 }
-                else if (point.Y > graph.Heigth)
+
+                    // if a point exceeds the borders of the graph his Y components is set to not visible, to prevent overflow.
+                else if (point.Y > Graph.Heigth)
                 {
-                    pointsList[pointsList.Count - 1].Add(new PointF(point.X, graph.Heigth + this.functionPen.Width));
+                    pointsList[pointsList.Count - 1].Add(new PointF(point.X, Graph.Heigth + FunctionPen.Width));
                 }
                 else if (point.Y < 0)
                 {
-                    pointsList[pointsList.Count - 1].Add(new PointF(point.X, -this.functionPen.Width));
+                    pointsList[pointsList.Count - 1].Add(new PointF(point.X, -FunctionPen.Width));
                 }
                 else
                 {
                     lastNan = false;
-                    pointsList[pointsList.Count - 1].Add(point);
+                    pointsList[pointsList.Count - 1].Add(point); //
                 }
             }
 
-            foreach (List<PointF> list in pointsList)
+            //draws each list of points only if the list has a number of elements > 1
+            foreach (var list in pointsList.Where(list => list.Count > 1))
             {
-                if (list.Count > 1)
-                {
-                    g.DrawLines(functionPen, list.ToArray());
-                }
+                g.DrawLines(FunctionPen, list.ToArray());
             }
         }
 
         public void DrawGraph(Graphics g)
         {
-            g.Clear(backColor);
+            g.Clear(_backColor);
 
-            for (int i = 0; i <= graph.NumOfCells; i++)
+            if (DrawGrid || DrawTicks)
             {
-                //grid
-                g.DrawLine(Pens.Gray, i * graph.CellSize, 0, i * graph.CellSize, graph.NumOfCells * graph.CellSize);
-                g.DrawLine(Pens.Gray, 0, i * graph.CellSize, graph.NumOfCells * graph.CellSize, i * graph.CellSize);
+                for (int i = 0; i <= Graph.NumOfCells; i++)
+                {
+                    if (DrawGrid)
+                    {
+                        //draw grid
+                        g.DrawLine(Pens.Gray, i*Graph.CellSize, 0, i*Graph.CellSize, Graph.NumOfCells*Graph.CellSize);
+                        g.DrawLine(Pens.Gray, 0, i*Graph.CellSize, Graph.NumOfCells*Graph.CellSize, i*Graph.CellSize);
+                    }
 
-                //ticks
-                g.DrawLine(axesPen, graph.Center.X - graph.TickSize / 2, i * graph.CellSize, graph.Center.X + graph.TickSize / 2, i * graph.CellSize);
-                g.DrawLine(axesPen, i * graph.CellSize, graph.Center.Y - graph.TickSize / 2, i * graph.CellSize, graph.Center.Y + graph.TickSize / 2);
+                    if (DrawTicks)
+                    {
+                        //draw tick marks
+                        g.DrawLine(_axesPen, Graph.Center.X - Graph.TickSize/2, i*Graph.CellSize,
+                                   Graph.Center.X + Graph.TickSize/2, i*Graph.CellSize);
+                        g.DrawLine(_axesPen, i*Graph.CellSize, Graph.Center.Y - Graph.TickSize/2, i*Graph.CellSize,
+                                   Graph.Center.Y + Graph.TickSize/2);
+                    }
+                }
             }
-            //axes
-            g.DrawLine(axesPen, 0, graph.Center.Y, graph.Width, graph.Center.Y);
-            g.DrawLine(axesPen, graph.Center.X, 0, graph.Center.X, graph.Heigth);
+            if (DrawAxes)
+            {
+                //draw axes
+                g.DrawLine(_axesPen, 0, Graph.Center.Y, Graph.Width, Graph.Center.Y);
+                g.DrawLine(_axesPen, Graph.Center.X, 0, Graph.Center.X, Graph.Heigth);
+            }
         }
+
         public void DrawFunctions(Graphics g)
         {
-            foreach (Function f in this.currentFunctions)
+            // draw all the current functions
+            foreach (Function f in _currentFunctions)
             {
-                this.drawFunction(g, f);
+                DrawFunction(g, f);
             }
         }
+
         public void Zoom(int delta)
         {
-            int value = (delta / wheelConstant) * zoomMultiplier;
+            int value = (delta/WheelConstant)*ZoomMultiplier;
 
-            if (graph.NumOfCells - value <= 4)
+            if (Graph.NumOfCells - value <= Graph.MinNumOfCells)
             {
-                graph.NumOfCells = 4;
+                Graph.NumOfCells = Graph.MinNumOfCells;
             }
-            else if (graph.NumOfCells - value >= 100)
+            else if (Graph.NumOfCells - value >= Graph.MaxNumOfCells)
             {
-                graph.NumOfCells = 100;
+                Graph.NumOfCells = Graph.MaxNumOfCells;
             }
             else
             {
-                graph.NumOfCells -= value;
+                Graph.NumOfCells -= value;
             }
         }
 
         public void AddFunction(Function f)
         {
-            this.currentFunctions.Add(f);
+            _currentFunctions.Add(f);
         }
+
         public void ClearFunctionList()
         {
-            this.currentFunctions.Clear();
+            if (_currentFunctions.Count > 0)
+                _currentFunctions.Clear();
         }
     }
 }
